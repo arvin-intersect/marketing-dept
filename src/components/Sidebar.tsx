@@ -1,8 +1,8 @@
 import { useState } from "react";
 import { 
-  ChevronRight, ChevronDown, HomeIcon, BarChart3, Database, Link2, Rocket,
-  Clock, Bookmark, Heart, Album, Boxes
+  ChevronRight, ChevronDown, HomeIcon, BarChart3, Database, Link2, Rocket, AreaChart
 } from "lucide-react";
+import { useNavigate, useLocation } from "react-router-dom";
 
 type SidebarItemProps = {
   icon: React.ReactNode;
@@ -44,13 +44,21 @@ const DropdownItem = ({ icon, label, isActive = false, onClick }: DropdownItemPr
 
 export const Sidebar = () => {
   const [isCollapsed, setIsCollapsed] = useState(false);
-  const [activeItem, setActiveItem] = useState("Home");
   const [openDropdown, setOpenDropdown] = useState<string | null>(null);
-  const [activeDropdownItem, setActiveDropdownItem] = useState("");
+  
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  const getActiveItem = () => {
+    if (location.pathname.startsWith('/analytics')) return 'Analytics';
+    if (location.pathname.startsWith('/dashboard')) return 'Home';
+    return 'Home'; // Default
+  }
+
+  const activeItem = getActiveItem();
 
   const toggleDropdown = (label: string) => {
     setOpenDropdown(openDropdown === label ? null : label);
-    setActiveItem(label);
   };
 
   if (isCollapsed) {
@@ -84,13 +92,19 @@ export const Sidebar = () => {
         </button>
       </div>
 
-      {/* Home */}
+      {/* Main Navigation */}
       <div className="py-2 px-3 flex flex-col gap-1">
         <SidebarItem 
           icon={<HomeIcon size={20} />} 
           label="Home" 
           isActive={activeItem === "Home"}
-          onClick={() => setActiveItem("Home")}
+          onClick={() => navigate("/dashboard")}
+        />
+        <SidebarItem 
+          icon={<AreaChart size={20} />} 
+          label="Analytics" 
+          isActive={activeItem === "Analytics"}
+          onClick={() => navigate("/analytics")}
         />
       </div>
 
@@ -100,14 +114,14 @@ export const Sidebar = () => {
           icon={<BarChart3 size={18} />} 
           label="Intersect Pulse"
           hasDropdown
-          isActive={activeItem === "Intersect Pulse"}
+          isActive={openDropdown === "Intersect Pulse"}
           onClick={() => toggleDropdown("Intersect Pulse")}
         />
         {openDropdown === "Intersect Pulse" && (
           <div className="mt-1 space-y-1 animate-fade-in">
-            <DropdownItem icon={<BarChart3 size={16} />} label="Dashboard" onClick={() => setActiveDropdownItem("Dashboard")} />
-            <DropdownItem icon={<BarChart3 size={16} />} label="SEO Analytics" onClick={() => setActiveDropdownItem("SEO Analytics")} />
-            <DropdownItem icon={<BarChart3 size={16} />} label="Ad Performance" onClick={() => setActiveDropdownItem("Ad Performance")} />
+            <DropdownItem icon={<BarChart3 size={16} />} label="Dashboard" />
+            <DropdownItem icon={<BarChart3 size={16} />} label="SEO Analytics" />
+            <DropdownItem icon={<BarChart3 size={16} />} label="Ad Performance" />
           </div>
         )}
       </div>
@@ -118,7 +132,7 @@ export const Sidebar = () => {
           icon={<Database size={18} />} 
           label="Intersect Vault"
           hasDropdown
-          isActive={activeItem === "Intersect Vault"}
+          isActive={openDropdown === "Intersect Vault"}
           onClick={() => toggleDropdown("Intersect Vault")}
         />
         {openDropdown === "Intersect Vault" && (
@@ -136,7 +150,7 @@ export const Sidebar = () => {
           icon={<Link2 size={18} />} 
           label="Intersect Bridge"
           hasDropdown
-          isActive={activeItem === "Intersect Bridge"}
+          isActive={openDropdown === "Intersect Bridge"}
           onClick={() => toggleDropdown("Intersect Bridge")}
         />
         {openDropdown === "Intersect Bridge" && (
@@ -154,7 +168,7 @@ export const Sidebar = () => {
           icon={<Rocket size={18} />} 
           label="Intersect Edge"
           hasDropdown
-          isActive={activeItem === "Intersect Edge"}
+          isActive={openDropdown === "Intersect Edge"}
           onClick={() => toggleDropdown("Intersect Edge")}
         />
         {openDropdown === "Intersect Edge" && (

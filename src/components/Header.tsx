@@ -1,5 +1,7 @@
 import { useState } from "react";
-import { HelpCircle, MessageSquare, BookOpen, GraduationCap, Plus, LogOut } from "lucide-react";
+import { UserButton } from "@clerk/clerk-react";
+import { HelpCircle, MessageSquare, BookOpen, GraduationCap, Plus } from "lucide-react";
+
 const Header = () => {
   const [helpMenuOpen, setHelpMenuOpen] = useState(false);
   return <div className="h-16 flex items-center justify-end px-6 border-b border-gray-800">
@@ -47,13 +49,7 @@ const Header = () => {
         </button>
         
         {/* User info and Logout */}
-        <div className="flex items-center gap-3">
-          <span className="text-sm text-gray-300">Signed in as <span className="font-medium text-white">Arvin</span></span>
-          <button className="px-4 py-1.5 text-gray-300 text-sm border border-gray-700 rounded-md hover:bg-gray-800 transition-colors flex items-center gap-2">
-            <LogOut size={16} />
-            Logout
-          </button>
-        </div>
+        <UserButton afterSignOutUrl="/login" />
       </div>
     </div>;
 };

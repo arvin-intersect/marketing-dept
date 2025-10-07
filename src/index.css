@@ -74,3 +74,31 @@
   filter: brightness(1.1);
   transform: translateY(-1px);
 }
+@layer utilities {
+  @keyframes pulse-glow {
+    0%, 100% {
+      box-shadow: 0 0 20px 5px hsla(var(--primary), 0.5);
+      transform: scale(1);
+    }
+    50% {
+      box-shadow: 0 0 30px 10px hsla(var(--primary), 0.7);
+      transform: scale(1.05);
+    }
+  }
+
+  @keyframes draw-line {
+    to {
+      stroke-dashoffset: 0;
+    }
+  }
+
+  .animate-pulse-glow {
+    animation: pulse-glow 4s ease-in-out infinite;
+  }
+  
+  .animate-draw-line {
+    stroke-dasharray: 1000;
+    stroke-dashoffset: 1000;
+    animation: draw-line 2s ease-out forwards;
+  }
+}
