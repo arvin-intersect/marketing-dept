@@ -3,13 +3,16 @@ import {
   ChevronRight, ChevronDown, HomeIcon, BarChart3, Database, Link2, Rocket, AreaChart
 } from "lucide-react";
 import { useNavigate, useLocation } from "react-router-dom";
+import { Badge } from "@/components/ui/badge"; // Import Badge
 
 type SidebarItemProps = {
   icon: React.ReactNode;
   label: string;
+  badgeText?: string; // New optional prop for a badge
   isActive?: boolean;
   hasDropdown?: boolean;
   onClick?: () => void;
+  disabled?: boolean;
 };
 
 type DropdownItemProps = {
@@ -19,13 +22,17 @@ type DropdownItemProps = {
   onClick?: () => void;
 };
 
-const SidebarItem = ({ icon, label, isActive = false, hasDropdown = false, onClick }: SidebarItemProps) => (
+const SidebarItem = ({ icon, label, badgeText, isActive = false, hasDropdown = false, onClick, disabled = false }: SidebarItemProps) => (
   <button 
-    className={`w-full flex items-center gap-3 p-3 rounded-md transition-colors ${isActive ? 'bg-accent' : 'hover:bg-accent'}`}
+    className={`w-full flex items-center gap-3 p-3 rounded-md transition-colors ${isActive ? 'bg-accent' : 'hover:bg-accent'} ${disabled ? 'opacity-50 cursor-not-allowed' : ''}`}
     onClick={onClick}
+    disabled={disabled}
   >
     <div className={isActive ? "text-white" : "text-gray-300"}>{icon}</div>
-    <span className="text-white text-sm font-medium flex-1 text-left">{label}</span>
+    <span className="text-white text-sm font-medium flex-1 text-left flex items-center justify-between">
+      {label}
+      {badgeText && <Badge variant="secondary" className="text-xs">{badgeText}</Badge>}
+    </span>
     {hasDropdown && (
       isActive ? <ChevronDown size={16} className="text-gray-300" /> : <ChevronRight size={16} className="text-gray-300" />
     )}
@@ -103,6 +110,7 @@ export const Sidebar = () => {
         <SidebarItem 
           icon={<AreaChart size={20} />} 
           label="Analytics" 
+          badgeText="WIP"
           isActive={activeItem === "Analytics"}
           onClick={() => navigate("/analytics")}
         />

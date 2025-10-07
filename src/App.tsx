@@ -8,7 +8,9 @@ import { ClerkProvider, SignedIn, SignedOut, RedirectToSignIn } from "@clerk/cle
 import Dashboard from "./pages/Dashboard";
 import NotFound from "./pages/NotFound";
 import LoginPage from "./pages/LoginPage";
-import AnalyticsPage from "./pages/Analytics"; // Import the new page
+import AnalyticsPage from "./pages/Analytics";
+import AIEmailComposer from "./pages/apps/AIEmailComposer";
+import LinkedInProspector from "./pages/apps/LinkedInProspector"; // Import the prospector
 
 const queryClient = new QueryClient();
 
@@ -26,41 +28,39 @@ function ClerkProviderWithRoutes() {
         <Route path="/login/*" element={<LoginPage />} />
         
         <Route path="/" element={
-          <>
-            <SignedIn>
-              <Navigate to="/dashboard" />
-            </SignedIn>
-            <SignedOut>
-              <Navigate to="/login" />
-            </SignedOut>
-          </>
+          <SignedIn>
+            <Navigate to="/dashboard" />
+          </SignedIn>
         } />
 
         <Route
           path="/dashboard"
-          element={
-            <SignedIn>
-              <Dashboard />
-            </SignedIn>
-          }
+          element={<SignedIn><Dashboard /></SignedIn>}
         />
-        {/* Add the new protected route for Analytics */}
         <Route
           path="/analytics"
-          element={
-            <SignedIn>
-              <AnalyticsPage />
-            </SignedIn>
-          }
+          element={<SignedIn><AnalyticsPage /></SignedIn>}
         />
-        {/* Catch-all for signed-out users trying to access protected routes */}
-        <Route path="/*" element={
-          <SignedOut>
-            <RedirectToSignIn redirectUrl="/login" />
-          </SignedOut>
-        } />
+        <Route
+          path="/app/ai-email-composer"
+          element={<SignedIn><AIEmailComposer /></SignedIn>}
+        />
+        <Route
+          path="/app/linkedin-prospector" // Add prospector route
+          element={<SignedIn><LinkedInProspector /></SignedIn>}
+        />
         
-        <Route path="*" element={<NotFound />} />
+        {/* Simplified catch-all for signed out users */}
+        <Route path="*" element={
+          <>
+            <SignedIn>
+              <NotFound />
+            </SignedIn>
+            <SignedOut>
+              <RedirectToSignIn redirectUrl="/login" />
+            </SignedOut>
+          </>
+        } />
       </Routes>
     </ClerkProvider>
   );
