@@ -10,7 +10,7 @@ import NotFound from "./pages/NotFound";
 import LoginPage from "./pages/LoginPage";
 import AnalyticsPage from "./pages/Analytics";
 import AIEmailComposer from "./pages/apps/AIEmailComposer";
-import LinkedInProspector from "./pages/apps/LinkedInProspector"; // Import the prospector
+import LinkedInProspector from "./pages/apps/LinkedInProspector";
 
 const queryClient = new QueryClient();
 
@@ -27,10 +27,16 @@ function ClerkProviderWithRoutes() {
       <Routes>
         <Route path="/login/*" element={<LoginPage />} />
         
+        {/* THIS IS THE CORRECTED ROUTE */}
         <Route path="/" element={
-          <SignedIn>
-            <Navigate to="/dashboard" />
-          </SignedIn>
+          <>
+            <SignedIn>
+              <Navigate to="/dashboard" />
+            </SignedIn>
+            <SignedOut>
+              <Navigate to="/login" />
+            </SignedOut>
+          </>
         } />
 
         <Route
@@ -46,11 +52,10 @@ function ClerkProviderWithRoutes() {
           element={<SignedIn><AIEmailComposer /></SignedIn>}
         />
         <Route
-          path="/app/linkedin-prospector" // Add prospector route
+          path="/app/linkedin-prospector"
           element={<SignedIn><LinkedInProspector /></SignedIn>}
         />
         
-        {/* Simplified catch-all for signed out users */}
         <Route path="*" element={
           <>
             <SignedIn>
