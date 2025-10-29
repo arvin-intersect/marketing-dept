@@ -9,16 +9,21 @@ import { createClient, SupabaseClient } from "@supabase/supabase-js";
 import { useUser, useAuth } from "@clerk/clerk-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ProspectCard } from "./linkedin-outreach/ProspectCard";
-import { AlertCircle, Loader2 } from "lucide-react";
+import { AlertCircle, Loader2, History } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
-// Get Supabase creds from env
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL!;
 const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY!;
 
-// Define the Prospect type matching the Supabase table
 export type Prospect = {
   id: string; user_id: string; created_at: string; name: string; title: string; company: string; location: string; linkedin_url: string; snippet: string; prospect_brief?: string | null; status: 'discovered' | 'pending' | 'connected' | 'nurture' | 'archived'; request_sent_by?: 'Max' | 'Mike' | null; request_sent_at?: string | null; connected_at?: string | null; messaged_at?: string | null; nurture_stage?: 'new_connection' | 'first_message_sent' | 'replied' | 'booked_call' | 'closed_not_a_fit' | null; notes?: string | null;
+};
+
+// New type for search history entries
+type SearchHistoryItem = {
+    id: string;
+    query: string;
+    created_at: string;
 };
 
 const EmptyState = ({ title, description }: { title: string; description: string }) => (
@@ -55,14 +60,32 @@ const LinkedInOutreachTool = () => {
     const [allProspects, setAllProspects] = useState<Prospect[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
+    const [searchHistory, setSearchHistory] = useState<SearchHistoryItem[]>([]);
 
-    // Helper function to get an authenticated Supabase client
     const getAuthenticatedSupabaseClient = useCallback(async (): Promise<SupabaseClient> => {
         const token = await getToken({ template: 'supabase' });
         return createClient(supabaseUrl, supabaseKey, {
             global: { headers: { Authorization: `Bearer ${token}` } },
+            auth: { storageKey: `supabase_token_${user?.id}` } 
         });
-    }, [getToken]);
+    }, [getToken, user]);
+
+    const fetchSearchHistory = useCallback(async () => {
+        if (!user) return;
+        try {
+            const authedSupabase = await getAuthenticatedSupabaseClient();
+            const { data, error } = await authedSupabase
+                .from('search_history')
+                .select('id, query, created_at')
+                .eq('user_id', user.id)
+                .order('created_at', { ascending: false })
+                .limit(5);
+            if (error) throw error;
+            setSearchHistory(data || []);
+        } catch (error: any) {
+            console.error("Failed to fetch search history:", error.message);
+        }
+    }, [user, getAuthenticatedSupabaseClient]);
 
     const fetchProspects = useCallback(async () => {
         if (!user) return;
@@ -79,7 +102,10 @@ const LinkedInOutreachTool = () => {
         setIsLoading(false);
     }, [user, toast, getAuthenticatedSupabaseClient]);
 
-    useEffect(() => { fetchProspects(); }, [fetchProspects]);
+    useEffect(() => { 
+        fetchProspects();
+        fetchSearchHistory();
+    }, [fetchProspects, fetchSearchHistory]);
 
     const enrichProspectsWithSummary = async (prospects: ApiProspect[], query: string): Promise<ApiProspect[]> => {
         const summaryPromises = prospects.map(async (prospect) => {
@@ -94,12 +120,25 @@ const LinkedInOutreachTool = () => {
         return Promise.all(summaryPromises);
     };
 
+    const logSearchQuery = async (query: string) => {
+        if (!user) return;
+        try {
+            const authedSupabase = await getAuthenticatedSupabaseClient();
+            const { error } = await authedSupabase.from('search_history').insert({ user_id: user.id, query });
+            if (error) throw error;
+            fetchSearchHistory(); // Refresh history after logging
+        } catch (error: any) {
+            console.error("Failed to log search query:", error.message);
+        }
+    };
+
     const handleSearch = async (query: string) => {
         setIsSearching(true);
         setLiveSearchResults([]);
         setError(null);
         setSearchQuery(query);
         try {
+            await logSearchQuery(query);
             const results = await findProspects(query, 1);
             setNextStartIndex(results.nextStartIndex);
             const enrichedResults = await enrichProspectsWithSummary(results.prospects, query);
@@ -198,6 +237,27 @@ const LinkedInOutreachTool = () => {
                                 </TabsList>
                                 <TabsContent value="search">
                                     <SearchForm onSearch={handleSearch} isLoading={isSearching} />
+
+                                    {searchHistory.length > 0 && (
+                                        <div className="mt-6">
+                                            <h3 className="text-sm font-medium text-muted-foreground mb-2 flex items-center gap-2">
+                                                <History className="h-4 w-4" />
+                                                Recent Searches
+                                            </h3>
+                                            <div className="flex flex-wrap gap-2">
+                                                {searchHistory.map(item => (
+                                                    <button
+                                                        key={item.id}
+                                                        onClick={() => handleSearch(item.query)}
+                                                        className="px-3 py-1 bg-muted hover:bg-accent text-sm text-foreground rounded-full transition-colors"
+                                                    >
+                                                        {item.query}
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        </div>
+                                    )}
+
                                     <ProspectResults results={liveSearchResults} isLoading={isSearching} isAppending={isAppending} hasMore={nextStartIndex !== null} onLoadMore={handleLoadMore} onSave={handleSaveProspect} savedProspectUrls={savedProspectUrls} />
                                 </TabsContent>
                                 <TabsContent value="outreach">
