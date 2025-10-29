@@ -10,7 +10,7 @@ import NotFound from "./pages/NotFound";
 import LoginPage from "./pages/LoginPage";
 import AnalyticsPage from "./pages/Analytics";
 import AIEmailComposer from "./pages/apps/AIEmailComposer";
-import LinkedInProspector from "./pages/apps/LinkedInProspector";
+import LinkedInOutreachTool from "./pages/apps/LinkedInOutreachTool";
 
 const queryClient = new QueryClient();
 
@@ -52,8 +52,8 @@ function ClerkProviderWithRoutes() {
           element={<SignedIn><AIEmailComposer /></SignedIn>}
         />
         <Route
-          path="/app/linkedin-prospector"
-          element={<SignedIn><LinkedInProspector /></SignedIn>}
+          path="/app/linkedin-outreach-tool"
+          element={<SignedIn><LinkedInOutreachTool /></SignedIn>}
         />
         
         <Route path="*" element={

@@ -46,14 +46,14 @@ const Dashboard = () => {
                   {/* --- ACTIVE CARD --- */}
                   <div 
                     className="feature-card bg-muted rounded-lg p-4 flex items-start gap-4 hover:bg-accent transition-colors cursor-pointer"
-                    onClick={() => navigate("/app/linkedin-prospector")}
+                    onClick={() => navigate("/app/linkedin-outreach-tool")}
                   >
                     <div className="p-3 rounded-lg bg-icon-blue/10 flex items-center justify-center">
                       <Users size={24} className="text-icon-blue" />
                     </div>
                     <div>
-                      <h3 className="font-medium text-white">LinkedIn Prospector</h3>
-                      <p className="text-sm text-gray-400 mt-1">Automate lead discovery from LinkedIn profiles.</p>
+                      <h3 className="font-medium text-white">LinkedIn Outreach & Nurture</h3>
+                      <p className="text-sm text-gray-400 mt-1">Find, connect, and track outreach prospects.</p>
                     </div>
                   </div>
                   
