@@ -5,17 +5,18 @@ import { SearchForm } from "./linkedin-outreach/SearchForm";
 import { ProspectResults } from "./linkedin-outreach/ProspectResults";
 import { findProspects, generateProspectBrief, generateRelevanceSummary, type Prospect as ApiProspect, type SearchResult } from "@/services/prospectorService";
 import { useToast } from "@/components/ui/use-toast";
-import { supabase } from "@/lib/supabaseClient";
+import { createClient, SupabaseClient } from "@supabase/supabase-js";
 import { useUser, useAuth } from "@clerk/clerk-react";
-import { createClient } from "@supabase/supabase-js";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ProspectCard } from "./linkedin-outreach/ProspectCard";
 import { AlertCircle, Loader2 } from "lucide-react";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 
+// Get Supabase creds from env
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL!;
 const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY!;
 
+// Define the Prospect type matching the Supabase table
 export type Prospect = {
   id: string; user_id: string; created_at: string; name: string; title: string; company: string; location: string; linkedin_url: string; snippet: string; prospect_brief?: string | null; status: 'discovered' | 'pending' | 'connected' | 'nurture' | 'archived'; request_sent_by?: 'Max' | 'Mike' | null; request_sent_at?: string | null; connected_at?: string | null; messaged_at?: string | null; nurture_stage?: 'new_connection' | 'first_message_sent' | 'replied' | 'booked_call' | 'closed_not_a_fit' | null; notes?: string | null;
 };
@@ -55,20 +56,28 @@ const LinkedInOutreachTool = () => {
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
 
+    // Helper function to get an authenticated Supabase client
+    const getAuthenticatedSupabaseClient = useCallback(async (): Promise<SupabaseClient> => {
+        const token = await getToken({ template: 'supabase' });
+        return createClient(supabaseUrl, supabaseKey, {
+            global: { headers: { Authorization: `Bearer ${token}` } },
+        });
+    }, [getToken]);
+
     const fetchProspects = useCallback(async () => {
         if (!user) return;
         setIsLoading(true);
-        const token = await getToken({ template: 'supabase' });
-        const authedSupabase = createClient(supabaseUrl, supabaseKey, { global: { headers: { Authorization: `Bearer ${token}` } } });
-        const { data, error } = await authedSupabase.from('prospects').select('*').eq('user_id', user.id).neq('status', 'archived').order('created_at', { ascending: false });
-        if (error) {
+        try {
+            const authedSupabase = await getAuthenticatedSupabaseClient();
+            const { data, error } = await authedSupabase.from('prospects').select('*').eq('user_id', user.id).neq('status', 'archived').order('created_at', { ascending: false });
+            if (error) throw error;
+            setAllProspects(data as Prospect[]);
+        } catch (error: any) {
             setError(error.message);
             toast({ title: "Error", description: "Could not fetch your prospects.", variant: "destructive" });
-        } else {
-            setAllProspects(data as Prospect[]);
         }
         setIsLoading(false);
-    }, [user, toast, getToken]);
+    }, [user, toast, getAuthenticatedSupabaseClient]);
 
     useEffect(() => { fetchProspects(); }, [fetchProspects]);
 
@@ -121,18 +130,21 @@ const LinkedInOutreachTool = () => {
     const handleSaveProspect = async (prospect: ApiProspect) => {
         if (!user) return;
         toast({ title: `Saving ${prospect.name}...` });
-        const token = await getToken({ template: 'supabase' });
-        const authedSupabase = createClient(supabaseUrl, supabaseKey, { global: { headers: { Authorization: `Bearer ${token}` } } });
-        const { error } = await authedSupabase.from('prospects').insert({ user_id: user.id, name: prospect.name, title: prospect.title, company: prospect.company, location: prospect.location, linkedin_url: prospect.linkedinUrl, snippet: prospect.snippet, status: 'discovered', });
-        if (error) {
-            if (error.code === '23505') {
-                toast({ title: "Already Saved", description: `${prospect.name} is already in your prospect list.` });
+        try {
+            const authedSupabase = await getAuthenticatedSupabaseClient();
+            const { error } = await authedSupabase.from('prospects').insert({ user_id: user.id, name: prospect.name, title: prospect.title, company: prospect.company, location: prospect.location, linkedin_url: prospect.linkedinUrl, snippet: prospect.snippet, status: 'discovered', });
+            if (error) {
+                if (error.code === '23505') {
+                    toast({ title: "Already Saved", description: `${prospect.name} is already in your prospect list.` });
+                } else {
+                    throw error;
+                }
             } else {
-                toast({ title: "Save Failed", description: error.message, variant: "destructive" });
+                toast({ title: "Prospect Saved!", description: `${prospect.name} has been added to your Outreach list.` });
+                fetchProspects();
             }
-        } else {
-            toast({ title: "Prospect Saved!", description: `${prospect.name} has been added to your Outreach list.` });
-            fetchProspects();
+        } catch (error: any) {
+             toast({ title: "Save Failed", description: error.message, variant: "destructive" });
         }
     };
 
@@ -147,14 +159,14 @@ const LinkedInOutreachTool = () => {
     };
 
     const handleUpdateProspect = async (prospectId: string, updates: Partial<Prospect>) => {
-        const token = await getToken({ template: 'supabase' });
-        const authedSupabase = createClient(supabaseUrl, supabaseKey, { global: { headers: { Authorization: `Bearer ${token}` } } });
-        const { error } = await authedSupabase.from('prospects').update(updates).eq('id', prospectId);
-        if (error) {
-            toast({ title: "Update Failed", description: error.message, variant: "destructive" });
-        } else {
+        try {
+            const authedSupabase = await getAuthenticatedSupabaseClient();
+            const { error } = await authedSupabase.from('prospects').update(updates).eq('id', prospectId);
+            if (error) throw error;
             toast({ title: "Success", description: "Prospect updated." });
             fetchProspects();
+        } catch (error: any) {
+             toast({ title: "Update Failed", description: error.message, variant: "destructive" });
         }
     };
 
