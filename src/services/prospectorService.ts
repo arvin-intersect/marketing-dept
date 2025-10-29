@@ -16,6 +16,12 @@ export interface SearchResult {
   totalResults: number;
 }
 
+// New type for the Hot-o-meter and intro message
+export interface OutreachIntelligence {
+  relevanceScore: number;
+  introMessage: string;
+}
+
 const API_KEY = import.meta.env.VITE_GOOGLE_API_KEY;
 const CX = import.meta.env.VITE_GOOGLE_CX;
 const API_URL = "https://www.googleapis.com/customsearch/v1";
@@ -40,61 +46,35 @@ export const findProspects = async (query: string, startIndex = 1): Promise<Sear
   const items = data.items || [];
 
   const prospects: Prospect[] = items.map((item: any) => {
-    // --- Improved Parsing Logic ---
     const titleParts = item.title.split(" - ");
     const name = titleParts[0] || "Name not available";
-    
     let title = "Title not specified";
     let company = "Company not specified";
-    
-    // The rest of the string after the name
     const profileInfo = titleParts.slice(1).join(" - ").replace(" | LinkedIn", "");
-    
-    // The first role listed is usually the current primary one
     const primaryRoleString = profileInfo.split(" | ")[0];
-    
-    // Split the primary role by " at " or " @ "
     const roleParts = primaryRoleString.split(/ at | @ /);
-    
     if (roleParts.length > 1) {
       title = roleParts[0].trim();
-      // The rest is likely the company, take the first part of it before any other separators
       company = roleParts.slice(1).join(" @ ").split(/ - | \| /)[0].trim();
     } else {
-      // If no "at" or "@", the whole string is the title
       title = primaryRoleString.trim();
     }
-
     return {
-      name: name,
-      title: title,
-      company: company,
-      location: item.pagemap?.metatags?.[0]?.["og:locality"] || "Location not specified",
-      linkedinUrl: item.link || "#",
-      snippet: item.snippet || "No additional information.",
-      image: item.pagemap?.cse_thumbnail?.[0]?.src || undefined,
+      name: name, title: title, company: company, location: item.pagemap?.metatags?.[0]?.["og:locality"] || "Location not specified", linkedinUrl: item.link || "#", snippet: item.snippet || "No additional information.", image: item.pagemap?.cse_thumbnail?.[0]?.src || undefined,
     };
   });
 
   return {
-    prospects,
-    nextStartIndex: data.queries?.nextPage?.[0]?.startIndex || null,
-    totalResults: parseInt(data.searchInformation?.totalResults || "0", 10),
+    prospects, nextStartIndex: data.queries?.nextPage?.[0]?.startIndex || null, totalResults: parseInt(data.searchInformation?.totalResults || "0", 10),
   };
 };
 
 export const generateProspectBrief = async (prospect: { name: string; title: string; company: string; snippet: string; }): Promise<string> => {
   const apiUrl = import.meta.env.VITE_API_URL || '';
   const response = await fetch(`${apiUrl}/api/generate-brief`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ ...prospect, type: 'brief' }),
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...prospect, type: 'brief' }),
   });
-
-  if (!response.ok) {
-    throw new Error("Failed to connect to the brief generation service.");
-  }
-
+  if (!response.ok) { throw new Error("Failed to connect to the brief generation service."); }
   const data = await response.json();
   return data.brief || "Could not generate a brief at this time.";
 };
@@ -102,15 +82,23 @@ export const generateProspectBrief = async (prospect: { name: string; title: str
 export const generateRelevanceSummary = async (prospect: Prospect, searchQuery: string): Promise<string> => {
   const apiUrl = import.meta.env.VITE_API_URL || '';
   const response = await fetch(`${apiUrl}/api/generate-brief`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ ...prospect, type: 'summary', searchQuery }),
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...prospect, type: 'summary', searchQuery }),
   });
-
-  if (!response.ok) {
-      throw new Error("Failed to connect to the summary generation service.");
-  }
-
+  if (!response.ok) { throw new Error("Failed to connect to the summary generation service."); }
   const data = await response.json();
   return data.summary || "AI summary not available.";
+};
+
+// New function to get the Hot-o-meter score and intro message
+export const generateOutreachIntelligence = async (prospect: { name: string; title: string; company: string; snippet: string; }): Promise<OutreachIntelligence> => {
+  const apiUrl = import.meta.env.VITE_API_URL || '';
+  const response = await fetch(`${apiUrl}/api/generate-brief`, {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...prospect, type: 'outreach_intelligence' }),
+  });
+  if (!response.ok) { throw new Error("Failed to get AI outreach intelligence."); }
+  const data = await response.json();
+  if (!data.relevanceScore || !data.introMessage) {
+      throw new Error("Invalid response from AI intelligence service.");
+  }
+  return data;
 };

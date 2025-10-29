@@ -3,7 +3,7 @@ import { Sidebar } from "@/components/Sidebar";
 import Header from "@/components/Header";
 import { SearchForm } from "./linkedin-outreach/SearchForm";
 import { ProspectResults } from "./linkedin-outreach/ProspectResults";
-import { findProspects, generateProspectBrief, generateRelevanceSummary, type Prospect as ApiProspect, type SearchResult } from "@/services/prospectorService";
+import { findProspects, generateOutreachIntelligence, generateRelevanceSummary, type Prospect as ApiProspect, type SearchResult, type OutreachIntelligence } from "@/services/prospectorService";
 import { useToast } from "@/components/ui/use-toast";
 import { createClient, SupabaseClient } from "@supabase/supabase-js";
 import { useUser, useAuth } from "@clerk/clerk-react";
@@ -19,12 +19,7 @@ export type Prospect = {
   id: string; user_id: string; created_at: string; name: string; title: string; company: string; location: string; linkedin_url: string; snippet: string; prospect_brief?: string | null; status: 'discovered' | 'pending' | 'connected' | 'nurture' | 'archived'; request_sent_by?: 'Max' | 'Mike' | null; request_sent_at?: string | null; connected_at?: string | null; messaged_at?: string | null; nurture_stage?: 'new_connection' | 'first_message_sent' | 'replied' | 'booked_call' | 'closed_not_a_fit' | null; notes?: string | null;
 };
 
-// New type for search history entries
-type SearchHistoryItem = {
-    id: string;
-    query: string;
-    created_at: string;
-};
+type SearchHistoryItem = { id: string; query: string; created_at: string; };
 
 const EmptyState = ({ title, description }: { title: string; description: string }) => (
     <div className="text-center py-10 bg-card rounded-lg mt-4">
@@ -33,7 +28,7 @@ const EmptyState = ({ title, description }: { title: string; description: string
     </div>
 );
 
-const ProspectList = ({ prospects, stage, onUpdateProspect, onGenerateBrief }: { prospects: Prospect[], stage: string, onUpdateProspect: (id: string, updates: Partial<Prospect>) => void, onGenerateBrief: (prospect: Prospect) => void }) => {
+const ProspectList = ({ prospects, stage, onUpdateProspect, onGenerateBrief, onGenerateOutreachIntel }: { prospects: Prospect[], stage: string, onUpdateProspect: (id: string, updates: Partial<Prospect>) => void, onGenerateBrief: (prospect: Prospect) => void, onGenerateOutreachIntel: (prospect: Prospect) => Promise<OutreachIntelligence | null> }) => {
     if (prospects.length === 0) {
         const messages: Record<string, { title: string, description: string }> = {
             'outreach': { title: "Outreach List Empty", description: "Use the 'Search' tab to find and save new prospects." }, 'pending': { title: "No Pending Connections", description: "Send connection requests from the 'Outreach' list." }, 'connected': { title: "No Connections Yet", description: "Once a prospect accepts your request, move them here from 'Pending'." }, 'nurture': { title: "Nurture Funnel is Empty", description: "Move connected prospects here after sending the first message." },
@@ -43,7 +38,7 @@ const ProspectList = ({ prospects, stage, onUpdateProspect, onGenerateBrief }: {
     }
     return (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mt-4">
-            {prospects.map(p => <ProspectCard key={p.id} prospect={p} onUpdate={onUpdateProspect} onGenerateBrief={onGenerateBrief} />)}
+            {prospects.map(p => <ProspectCard key={p.id} prospect={p} onUpdate={onUpdateProspect} onGenerateBrief={onGenerateBrief} onGenerateOutreachIntel={onGenerateOutreachIntel} />)}
         </div>
     );
 };
@@ -64,27 +59,17 @@ const LinkedInOutreachTool = () => {
 
     const getAuthenticatedSupabaseClient = useCallback(async (): Promise<SupabaseClient> => {
         const token = await getToken({ template: 'supabase' });
-        return createClient(supabaseUrl, supabaseKey, {
-            global: { headers: { Authorization: `Bearer ${token}` } },
-            auth: { storageKey: `supabase_token_${user?.id}` } 
-        });
+        return createClient(supabaseUrl, supabaseKey, { global: { headers: { Authorization: `Bearer ${token}` } }, auth: { storageKey: `supabase_token_${user?.id}` } });
     }, [getToken, user]);
 
     const fetchSearchHistory = useCallback(async () => {
         if (!user) return;
         try {
             const authedSupabase = await getAuthenticatedSupabaseClient();
-            const { data, error } = await authedSupabase
-                .from('search_history')
-                .select('id, query, created_at')
-                .eq('user_id', user.id)
-                .order('created_at', { ascending: false })
-                .limit(5);
+            const { data, error } = await authedSupabase.from('search_history').select('id, query, created_at').eq('user_id', user.id).order('created_at', { ascending: false }).limit(5);
             if (error) throw error;
             setSearchHistory(data || []);
-        } catch (error: any) {
-            console.error("Failed to fetch search history:", error.message);
-        }
+        } catch (error: any) { console.error("Failed to fetch search history:", error.message); }
     }, [user, getAuthenticatedSupabaseClient]);
 
     const fetchProspects = useCallback(async () => {
@@ -102,67 +87,45 @@ const LinkedInOutreachTool = () => {
         setIsLoading(false);
     }, [user, toast, getAuthenticatedSupabaseClient]);
 
-    useEffect(() => { 
-        fetchProspects();
-        fetchSearchHistory();
-    }, [fetchProspects, fetchSearchHistory]);
+    useEffect(() => { fetchProspects(); fetchSearchHistory(); }, [fetchProspects, fetchSearchHistory]);
 
     const enrichProspectsWithSummary = async (prospects: ApiProspect[], query: string): Promise<ApiProspect[]> => {
-        const summaryPromises = prospects.map(async (prospect) => {
-            try {
-                const summary = await generateRelevanceSummary(prospect, query);
-                return { ...prospect, relevanceSummary: summary };
-            } catch (e) {
-                console.error(`Failed to generate summary for ${prospect.name}`, e);
-                return { ...prospect, relevanceSummary: "AI summary could not be generated." };
-            }
-        });
-        return Promise.all(summaryPromises);
+        return Promise.all(prospects.map(async (p) => {
+            try { return { ...p, relevanceSummary: await generateRelevanceSummary(p, query) }; } catch (e) { console.error(`Failed summary for ${p.name}`, e); return { ...p, relevanceSummary: "AI summary failed." }; }
+        }));
     };
-
+    
     const logSearchQuery = async (query: string) => {
         if (!user) return;
         try {
             const authedSupabase = await getAuthenticatedSupabaseClient();
             const { error } = await authedSupabase.from('search_history').insert({ user_id: user.id, query });
             if (error) throw error;
-            fetchSearchHistory(); // Refresh history after logging
-        } catch (error: any) {
-            console.error("Failed to log search query:", error.message);
-        }
+            fetchSearchHistory();
+        } catch (error: any) { console.error("Failed to log search query:", error.message); }
     };
 
     const handleSearch = async (query: string) => {
-        setIsSearching(true);
-        setLiveSearchResults([]);
-        setError(null);
-        setSearchQuery(query);
+        setIsSearching(true); setLiveSearchResults([]); setError(null); setSearchQuery(query);
         try {
             await logSearchQuery(query);
             const results = await findProspects(query, 1);
             setNextStartIndex(results.nextStartIndex);
             const enrichedResults = await enrichProspectsWithSummary(results.prospects, query);
             setLiveSearchResults(enrichedResults);
-        } catch (e: any) {
-            setError(e.message);
-            toast({ title: "Search Error", description: e.message, variant: "destructive" });
-        }
+        } catch (e: any) { setError(e.message); toast({ title: "Search Error", description: e.message, variant: "destructive" }); }
         setIsSearching(false);
     };
 
     const handleLoadMore = async () => {
         if (!nextStartIndex || !searchQuery || isAppending) return;
-        setIsAppending(true);
-        setError(null);
+        setIsAppending(true); setError(null);
         try {
             const results = await findProspects(searchQuery, nextStartIndex);
             setNextStartIndex(results.nextStartIndex);
             const enrichedResults = await enrichProspectsWithSummary(results.prospects, searchQuery);
             setLiveSearchResults(prev => [...prev, ...enrichedResults]);
-        } catch (e: any) {
-            setError(e.message);
-            toast({ title: "Error Loading More", description: e.message, variant: "destructive" });
-        }
+        } catch (e: any) { setError(e.message); toast({ title: "Error Loading More", description: e.message, variant: "destructive" }); }
         setIsAppending(false);
     };
 
@@ -172,28 +135,17 @@ const LinkedInOutreachTool = () => {
         try {
             const authedSupabase = await getAuthenticatedSupabaseClient();
             const { error } = await authedSupabase.from('prospects').insert({ user_id: user.id, name: prospect.name, title: prospect.title, company: prospect.company, location: prospect.location, linkedin_url: prospect.linkedinUrl, snippet: prospect.snippet, status: 'discovered', });
-            if (error) {
-                if (error.code === '23505') {
-                    toast({ title: "Already Saved", description: `${prospect.name} is already in your prospect list.` });
-                } else {
-                    throw error;
-                }
-            } else {
-                toast({ title: "Prospect Saved!", description: `${prospect.name} has been added to your Outreach list.` });
-                fetchProspects();
-            }
-        } catch (error: any) {
-             toast({ title: "Save Failed", description: error.message, variant: "destructive" });
-        }
+            if (error) { if (error.code === '23505') { toast({ title: "Already Saved", description: `${prospect.name} is already in your prospect list.` }); } else { throw error; } } else { toast({ title: "Prospect Saved!", description: `${prospect.name} has been added to your Outreach list.` }); fetchProspects(); }
+        } catch (error: any) { toast({ title: "Save Failed", description: error.message, variant: "destructive" }); }
     };
-
-    const handleGenerateBrief = async (prospect: Prospect) => {
-        toast({ title: `Generating brief for ${prospect.name}...` });
+    
+    const handleGenerateOutreachIntel = async (prospect: Prospect): Promise<OutreachIntelligence | null> => {
         try {
-            const brief = await generateProspectBrief(prospect);
-            await handleUpdateProspect(prospect.id, { prospect_brief: brief });
+            const intel = await generateOutreachIntelligence(prospect);
+            return intel;
         } catch (e: any) {
-            toast({ title: "Brief Generation Failed", description: e.message, variant: "destructive" });
+            toast({ title: "AI Generation Failed", description: e.message, variant: "destructive" });
+            return null;
         }
     };
 
@@ -204,9 +156,7 @@ const LinkedInOutreachTool = () => {
             if (error) throw error;
             toast({ title: "Success", description: "Prospect updated." });
             fetchProspects();
-        } catch (error: any) {
-             toast({ title: "Update Failed", description: error.message, variant: "destructive" });
-        }
+        } catch (error: any) { toast({ title: "Update Failed", description: error.message, variant: "destructive" }); }
     };
 
     const savedProspectUrls = useMemo(() => new Set(allProspects.map(p => p.linkedin_url)), [allProspects]);
@@ -237,49 +187,28 @@ const LinkedInOutreachTool = () => {
                                 </TabsList>
                                 <TabsContent value="search">
                                     <SearchForm onSearch={handleSearch} isLoading={isSearching} />
-
                                     {searchHistory.length > 0 && (
                                         <div className="mt-6">
-                                            <h3 className="text-sm font-medium text-muted-foreground mb-2 flex items-center gap-2">
-                                                <History className="h-4 w-4" />
-                                                Recent Searches
-                                            </h3>
-                                            <div className="flex flex-wrap gap-2">
-                                                {searchHistory.map(item => (
-                                                    <button
-                                                        key={item.id}
-                                                        onClick={() => handleSearch(item.query)}
-                                                        className="px-3 py-1 bg-muted hover:bg-accent text-sm text-foreground rounded-full transition-colors"
-                                                    >
-                                                        {item.query}
-                                                    </button>
-                                                ))}
-                                            </div>
+                                            <h3 className="text-sm font-medium text-muted-foreground mb-2 flex items-center gap-2"><History className="h-4 w-4" />Recent Searches</h3>
+                                            <div className="flex flex-wrap gap-2">{searchHistory.map(item => (<button key={item.id} onClick={() => handleSearch(item.query)} className="px-3 py-1 bg-muted hover:bg-accent text-sm text-foreground rounded-full transition-colors">{item.query}</button>))}</div>
                                         </div>
                                     )}
-
                                     <ProspectResults results={liveSearchResults} isLoading={isSearching} isAppending={isAppending} hasMore={nextStartIndex !== null} onLoadMore={handleLoadMore} onSave={handleSaveProspect} savedProspectUrls={savedProspectUrls} />
                                 </TabsContent>
                                 <TabsContent value="outreach">
-                                    {isLoading ? <Loader2 className="animate-spin mx-auto mt-8" /> : <ProspectList prospects={discoveredProspects} stage="outreach" onUpdateProspect={handleUpdateProspect} onGenerateBrief={handleGenerateBrief} />}
+                                    {isLoading ? <Loader2 className="animate-spin mx-auto mt-8" /> : <ProspectList prospects={discoveredProspects} stage="outreach" onUpdateProspect={handleUpdateProspect} onGenerateBrief={() => {}} onGenerateOutreachIntel={handleGenerateOutreachIntel} />}
                                 </TabsContent>
                                 <TabsContent value="pending">
-                                    {isLoading ? <Loader2 className="animate-spin mx-auto mt-8" /> : <ProspectList prospects={pendingProspects} stage="pending" onUpdateProspect={handleUpdateProspect} onGenerateBrief={handleGenerateBrief} />}
+                                    {isLoading ? <Loader2 className="animate-spin mx-auto mt-8" /> : <ProspectList prospects={pendingProspects} stage="pending" onUpdateProspect={handleUpdateProspect} onGenerateBrief={() => {}} onGenerateOutreachIntel={handleGenerateOutreachIntel}/>}
                                 </TabsContent>
                                 <TabsContent value="connected">
-                                    {isLoading ? <Loader2 className="animate-spin mx-auto mt-8" /> : <ProspectList prospects={connectedProspects} stage="connected" onUpdateProspect={handleUpdateProspect} onGenerateBrief={handleGenerateBrief} />}
+                                    {isLoading ? <Loader2 className="animate-spin mx-auto mt-8" /> : <ProspectList prospects={connectedProspects} stage="connected" onUpdateProspect={handleUpdateProspect} onGenerateBrief={() => {}} onGenerateOutreachIntel={handleGenerateOutreachIntel}/>}
                                 </TabsContent>
                                 <TabsContent value="nurture">
-                                    {isLoading ? <Loader2 className="animate-spin mx-auto mt-8" /> : <ProspectList prospects={nurtureProspects} stage="nurture" onUpdateProspect={handleUpdateProspect} onGenerateBrief={handleGenerateBrief} />}
+                                    {isLoading ? <Loader2 className="animate-spin mx-auto mt-8" /> : <ProspectList prospects={nurtureProspects} stage="nurture" onUpdateProspect={handleUpdateProspect} onGenerateBrief={() => {}} onGenerateOutreachIntel={handleGenerateOutreachIntel} />}
                                 </TabsContent>
                             </Tabs>
-                            {error && (
-                                <Alert variant="destructive" className="mt-8">
-                                    <AlertCircle className="h-4 w-4" />
-                                    <AlertTitle>An Error Occurred</AlertTitle>
-                                    <AlertDescription>{error}</AlertDescription>
-                                </Alert>
-                            )}
+                            {error && (<Alert variant="destructive" className="mt-8"><AlertCircle className="h-4 w-4" /><AlertTitle>An Error Occurred</AlertTitle><AlertDescription>{error}</AlertDescription></Alert>)}
                         </div>
                     </main>
                 </div>
