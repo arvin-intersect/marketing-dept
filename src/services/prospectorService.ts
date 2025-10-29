@@ -7,7 +7,7 @@ export interface Prospect {
   snippet: string;
   image?: string;
   prospectBrief?: string;
-  relevanceSummary?: string; // New field for the one-line summary
+  relevanceSummary?: string;
 }
 
 export interface SearchResult {
@@ -40,12 +40,30 @@ export const findProspects = async (query: string, startIndex = 1): Promise<Sear
   const items = data.items || [];
 
   const prospects: Prospect[] = items.map((item: any) => {
+    // --- Improved Parsing Logic ---
     const titleParts = item.title.split(" - ");
     const name = titleParts[0] || "Name not available";
-    const restOfTitle = titleParts.slice(1).join(" - ").replace(" | LinkedIn", "");
-    const titleCompanyParts = restOfTitle.split(" at ");
-    const title = titleCompanyParts[0] || "Title not specified";
-    const company = titleCompanyParts[1] || "Company not specified";
+    
+    let title = "Title not specified";
+    let company = "Company not specified";
+    
+    // The rest of the string after the name
+    const profileInfo = titleParts.slice(1).join(" - ").replace(" | LinkedIn", "");
+    
+    // The first role listed is usually the current primary one
+    const primaryRoleString = profileInfo.split(" | ")[0];
+    
+    // Split the primary role by " at " or " @ "
+    const roleParts = primaryRoleString.split(/ at | @ /);
+    
+    if (roleParts.length > 1) {
+      title = roleParts[0].trim();
+      // The rest is likely the company, take the first part of it before any other separators
+      company = roleParts.slice(1).join(" @ ").split(/ - | \| /)[0].trim();
+    } else {
+      // If no "at" or "@", the whole string is the title
+      title = primaryRoleString.trim();
+    }
 
     return {
       name: name,
@@ -65,7 +83,6 @@ export const findProspects = async (query: string, startIndex = 1): Promise<Sear
   };
 };
 
-// Generates the detailed brief for a saved prospect
 export const generateProspectBrief = async (prospect: { name: string; title: string; company: string; snippet: string; }): Promise<string> => {
   const apiUrl = import.meta.env.VITE_API_URL || '';
   const response = await fetch(`${apiUrl}/api/generate-brief`, {
@@ -82,7 +99,6 @@ export const generateProspectBrief = async (prospect: { name: string; title: str
   return data.brief || "Could not generate a brief at this time.";
 };
 
-// Generates the one-line relevance summary for search results
 export const generateRelevanceSummary = async (prospect: Prospect, searchQuery: string): Promise<string> => {
   const apiUrl = import.meta.env.VITE_API_URL || '';
   const response = await fetch(`${apiUrl}/api/generate-brief`, {
