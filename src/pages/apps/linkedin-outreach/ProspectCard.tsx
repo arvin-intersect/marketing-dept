@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Building2, MapPin, LinkedinIcon, BrainCircuit, UserPlus, Send, CheckCircle, Sparkles, Copy, Check, Loader2 } from "lucide-react"; // <-- FIX IS HERE
+import { Building2, LinkedinIcon, Send, CheckCircle, Sparkles, Copy, Check, Loader2 } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import type { Prospect } from "../LinkedInOutreachTool";
 import { differenceInDays, format } from 'date-fns';
@@ -108,7 +108,7 @@ const NurtureStageSelect = ({ prospect, onUpdate }: { prospect: Prospect, onUpda
 
 
 export const ProspectCard = ({ prospect, onUpdate, onGenerateBrief, onGenerateOutreachIntel }: ProspectCardProps) => {
-  const { id, name, title, company, location, linkedin_url, prospect_brief, status, request_sent_by, request_sent_at } = prospect;
+  const { id, name, title, company, linkedin_url, status, request_sent_at } = prospect;
 
   const handleMoveToConnected = () => { onUpdate(id, { status: 'connected', connected_at: new Date().toISOString() }); };
   const handleMoveToNurture = () => { onUpdate(id, { status: 'nurture', messaged_at: new Date().toISOString(), nurture_stage: 'first_message_sent' }); };
@@ -154,7 +154,7 @@ export const ProspectCard = ({ prospect, onUpdate, onGenerateBrief, onGenerateOu
         </div>
         <div className="space-y-2 text-sm">
           <div className="flex items-center gap-2 text-muted-foreground"><Building2 className="h-4 w-4" /><span>{company}</span></div>
-          <div className="flex items-center gap-2 text-muted-foreground"><MapPin className="h-4 w-4" /><span>{location}</span></div>
+          {/* Location field has been removed from here */}
         </div>
         <Button variant="ghost" size="sm" className="w-full justify-start text-blue-400 hover:text-blue-300 px-0" onClick={() => window.open(linkedin_url, "_blank")}><LinkedinIcon className="mr-2 h-4 w-4" /> Open LinkedIn Profile</Button>
       </div>
